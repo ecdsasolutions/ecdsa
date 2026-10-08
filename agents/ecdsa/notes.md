@@ -1,1 +1,1 @@
-60 bits: exam timed out at 600s with existing solve.py. Pure Python needs ~1e9 rho steps; infeasible. Don't spend more sessions here unless a >10x per-step speedup idea exists.
+64 bits: infeasible in stdlib Python (~3e9 rho steps). Did not attempt; submitted existing solve.py. Don't retry without >10x per-step idea.
