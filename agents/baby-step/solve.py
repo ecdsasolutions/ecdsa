@@ -1,0 +1,110 @@
+import sys
+import json
+import math
+
+def solve():
+    raw = sys.stdin.read().strip()
+    if not raw:
+        return
+    data = json.loads(raw)
+
+    p = int(data["p"])
+    a = int(data["a"])
+    b = int(data["b"])
+    Gx = int(data["Gx"])
+    Gy = int(data["Gy"])
+    n = int(data["n"])
+    Px = int(data["Px"])
+    Py = int(data["Py"])
+
+    def point_add(P1, P2):
+        if P1 is None:
+            return P2
+        if P2 is None:
+            return P1
+        x1, y1 = P1
+        x2, y2 = P2
+        if x1 == x2:
+            if (y1 + y2) % p == 0:
+                return None
+            inv = pow(2 * y1, -1, p)
+            sl = (3 * x1 * x1 + a) * inv % p
+        else:
+            inv = pow(x2 - x1, -1, p)
+            sl = (y2 - y1) * inv % p
+        x3 = (sl * sl - x1 - x2) % p
+        y3 = (sl * (x1 - x3) - y1) % p
+        return (x3, y3)
+
+    def point_mul(k, P):
+        R = None
+        T = P
+        while k > 0:
+            if k & 1:
+                R = point_add(R, T)
+            T = point_add(T, T)
+            k >>= 1
+        return R
+
+    # Optimal m for uniform k: minimizes m + n / (4*m) => m = isqrt(n) // 2 + 1
+    m = math.isqrt(n) // 2 + 1
+    M = 2 * m + 1
+
+    baby_x = {}
+    x1, y1 = Gx, Gy
+    baby_x[x1] = (1 << 1) | (y1 & 1)
+
+    if m >= 2:
+        # j = 2: 2*G (point doubling)
+        inv = pow(2 * y1, -1, p)
+        sl = (3 * x1 * x1 + a) * inv % p
+        x3 = (sl * sl - 2 * x1) % p
+        y1 = (sl * (x1 - x3) - y1) % p
+        x1 = x3
+        baby_x[x1] = (2 << 1) | (y1 & 1)
+
+        # j >= 3: point addition with G
+        for j in range(3, m + 1):
+            inv = pow(Gx - x1, -1, p)
+            sl = (Gy - y1) * inv % p
+            x3 = (sl * sl - x1 - Gx) % p
+            y1 = (sl * (x1 - x3) - y1) % p
+            x1 = x3
+            baby_x[x1] = (j << 1) | (y1 & 1)
+
+    # Giant step stride: -M*G
+    MG = point_mul(M, (Gx, Gy))
+    neg_x, neg_y = MG[0], (-MG[1]) % p
+
+    cur_x, cur_y = Px, Py
+    max_i = (n + M) // M + 2
+
+    for i in range(max_i):
+        if cur_x is None:
+            ans = (i * M) % n
+            print(f"k={ans}")
+            return
+        val = baby_x.get(cur_x)
+        if val is not None:
+            j = val >> 1
+            if (cur_y & 1) == (val & 1):
+                ans = (i * M + j) % n
+            else:
+                ans = (i * M - j) % n
+            print(f"k={ans}")
+            return
+        if cur_x == neg_x:
+            if (cur_y + neg_y) % p == 0:
+                cur_x, cur_y = None, None
+                continue
+            inv = pow(2 * cur_y, -1, p)
+            sl = (3 * cur_x * cur_x + a) * inv % p
+        else:
+            inv = pow(neg_x - cur_x, -1, p)
+            sl = (neg_y - cur_y) * inv % p
+        nx = (sl * sl - cur_x - neg_x) % p
+        cur_y = (sl * (cur_x - nx) - cur_y) % p
+        cur_x = nx
+
+if __name__ == "__main__":
+    solve()
