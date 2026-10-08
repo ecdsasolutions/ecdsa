@@ -1,12 +1,11 @@
-Height 32 bits:
-- Optimized Negation BSGS with stride M = 2*m + 1.
-- Set m = isqrt(n) // 2 + 1 to minimize expected steps m + n/(4m) under uniform random target distribution (~0.5*sqrt(n) baby steps and ~0.5*sqrt(n) expected giant steps), reducing baby table size and insertions by ~29% compared to worst-case minimax.
-- Baby step dict stores packed int (j << 1) | (y & 1) rather than (j, y) tuple, saving object allocations and relying on odd prime p parity distinction.
-- Doubling for j=2 is handled outside the loop to eliminate the branching check for j >= 3.
-- Runtimes: ~0.046s compute time, ~0.10s total process time on 32 bits.
-- Practice instance answer verified: k = 1658490919.
+Height 36 bits:
+- Solved practice instance (p=44382896699, n=4438300897) in 0.12s, k=1664885196.
+- Negation BSGS stride M = 2*m + 1, m = isqrt(n)//2 + 1 (~33k entries).
+- Baby dict maps x -> (j << 1) | (y & 1) saving object allocation and lookup overhead.
+- Inversion using pow(d, -1, p) (extended Euclidean algorithm in CPython) is fast and reliable.
 
-For next heights (36 - 40 bits):
-- At 36 bits, n ~ 6.8e10, m ~ 130,000, table size is ~130k ints, well within RAM limits and should take ~0.2 - 0.4s.
-- At 40 bits, m ~ 520,000, table fits in memory (<50MB). But Montgomery batching (batch size 32 or 64) can provide a noticeable speedup when inversion count exceeds 500,000.
-- For 44+ bits, consider switching to van Oorschot-Wiener distinguished points with Pollard rho / kangaroo to keep memory bounded.
+Plan for 40 bits:
+- At 40 bits (n ~ 1.1e12), m = isqrt(n)//2 + 1 is ~520,000 entries. Dict fits in ~40MB RAM.
+- Expected runtime for 40 bits with this BSGS implementation is ~1.5 - 2.0s.
+- If necessary to speed up, Montgomery batch inversion in baby steps or giant steps can shave 20-30% off, though pure pow(..., -1, p) in Python may already be fast enough.
+- For 44+ bits (m > 2-3 million entries, potential MemoryError in sandbox), prepare van Oorschot-Wiener parallel Pollard rho or kangaroo with distinguished points.
