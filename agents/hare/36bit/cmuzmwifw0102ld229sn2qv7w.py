@@ -1,0 +1,191 @@
+#!/usr/bin/env python3
+"""36-bit ECDLP: negation-map BSGS + Montgomery batch inversion.
+
+k = i*M + j or i*M - j, M = 2m+1, m = isqrt(n)//2+1.
+Baby table keyed by x -> (j<<1)|(y&1). Giant steps subtract M*G.
+"""
+import json
+import sys
+
+
+def solve(p, a, Gx, Gy, n, Px, Py):
+    if Px == 0 and Py == 0:
+        return 0
+
+    Gx %= p
+    Gy %= p
+    Px %= p
+    Py %= p
+
+    m = int(n**0.5) // 2 + 1
+    M = 2 * m + 1
+    BATCH = 128
+
+    def inv_batch(zs, L):
+        pref = [0] * L
+        acc = zs[0]
+        pref[0] = acc
+        for i in range(1, L):
+            acc = (acc * zs[i]) % p
+            pref[i] = acc
+        iv = pow(acc, -1, p)
+        out = [0] * L
+        for i in range(L - 1, 0, -1):
+            out[i] = (iv * pref[i - 1]) % p
+            iv = (iv * zs[i]) % p
+        out[0] = iv
+        return out
+
+    # S[i] = i*G
+    Sx = [0] * (BATCH + 1)
+    Sy = [0] * (BATCH + 1)
+    Sx[1], Sy[1] = Gx, Gy
+    lam = ((3 * Gx * Gx + a) * pow((2 * Gy) % p, -1, p)) % p
+    nx = (lam * lam - 2 * Gx) % p
+    ny = (lam * (Gx - nx) - Gy) % p
+    Sx[2], Sy[2] = nx, ny
+    for i in range(3, BATCH + 1):
+        dx = (Gx - Sx[i - 1]) % p
+        lam = ((Gy - Sy[i - 1]) * pow(dx, -1, p)) % p
+        nx = (lam * lam - Sx[i - 1] - Gx) % p
+        ny = (lam * (Sx[i - 1] - nx) - Sy[i - 1]) % p
+        Sx[i], Sy[i] = nx, ny
+
+    baby = {}
+    limit = m if m < BATCH else BATCH
+    for i in range(1, limit + 1):
+        baby[Sx[i]] = (i << 1) | (Sy[i] & 1)
+
+    rx, ry = Sx[limit], Sy[limit]
+    j = limit
+    while j < m:
+        cnt = BATCH if j + BATCH <= m else m - j
+        dxs = [1] * cnt
+        dbl = 0
+        for t in range(cnt):
+            dx = (Sx[t + 1] - rx) % p
+            if dx == 0:
+                dbl |= 1 << t
+            else:
+                dxs[t] = dx
+        ivs = inv_batch(dxs, cnt)
+        for t in range(cnt):
+            i = t + 1
+            if (dbl >> t) & 1:
+                lam = ((3 * rx * rx + a) * pow((2 * ry) % p, -1, p)) % p
+                nx = (lam * lam - 2 * rx) % p
+                ny = (lam * (rx - nx) - ry) % p
+            else:
+                lam = ((Sy[i] - ry) * ivs[t]) % p
+                nx = (lam * lam - rx - Sx[i]) % p
+                ny = (lam * (rx - nx) - ry) % p
+            baby[nx] = ((j + i) << 1) | (ny & 1)
+            if i == cnt:
+                rx, ry = nx, ny
+        j += cnt
+
+    # D = M*G, then U[i] = -(i*D)
+    rx_, ry_ = None, None
+    ax, ay = Gx, Gy
+    kk = M
+    while kk:
+        if kk & 1:
+            if rx_ is None:
+                rx_, ry_ = ax, ay
+            else:
+                lam = ((ay - ry_) * pow((ax - rx_) % p, -1, p)) % p
+                nx = (lam * lam - rx_ - ax) % p
+                ny = (lam * (rx_ - nx) - ry_) % p
+                rx_, ry_ = nx, ny
+        lam = ((3 * ax * ax + a) * pow((2 * ay) % p, -1, p)) % p
+        nx = (lam * lam - 2 * ax) % p
+        ny = (lam * (ax - nx) - ay) % p
+        ax, ay = nx, ny
+        kk >>= 1
+
+    Ux = [0] * (BATCH + 1)
+    Uy = [0] * (BATCH + 1)
+    Ux[1], Uy[1] = rx_, (-ry_) % p
+    lam = ((3 * Ux[1] * Ux[1] + a) * pow((2 * Uy[1]) % p, -1, p)) % p
+    nx = (lam * lam - 2 * Ux[1]) % p
+    ny = (lam * (Ux[1] - nx) - Uy[1]) % p
+    Ux[2], Uy[2] = nx, ny
+    ux1, uy1 = Ux[1], Uy[1]
+    for i in range(3, BATCH + 1):
+        dx = (ux1 - Ux[i - 1]) % p
+        lam = ((uy1 - Uy[i - 1]) * pow(dx, -1, p)) % p
+        nx = (lam * lam - Ux[i - 1] - ux1) % p
+        ny = (lam * (Ux[i - 1] - nx) - Uy[i - 1]) % p
+        Ux[i], Uy[i] = nx, ny
+
+    get = baby.get
+    qx, qy = Px, Py
+    max_i = (n - 1 + m) // M
+    i_base = 0
+    while i_base <= max_i:
+        hit = get(qx)
+        if hit is not None:
+            jv = hit >> 1
+            if (qy & 1) == (hit & 1):
+                return (i_base * M + jv) % n
+            return (i_base * M - jv) % n
+        remain = max_i - i_base
+        if remain <= 0:
+            break
+        cnt = BATCH if remain > BATCH else remain
+        dxs = [1] * cnt
+        infm = 0
+        dbl = 0
+        for t in range(cnt):
+            dx = (Ux[t + 1] - qx) % p
+            if dx == 0:
+                if (qy + Uy[t + 1]) % p == 0:
+                    infm |= 1 << t
+                else:
+                    dbl |= 1 << t
+            else:
+                dxs[t] = dx
+        ivs = inv_batch(dxs, cnt)
+        for t in range(cnt):
+            i = t + 1
+            idx = i_base + i
+            if (infm >> t) & 1:
+                return (idx * M) % n
+            ux = Ux[i]
+            uy = Uy[i]
+            if (dbl >> t) & 1:
+                lam = ((3 * qx * qx + a) * pow((2 * qy) % p, -1, p)) % p
+                nx = (lam * lam - 2 * qx) % p
+                ny = (lam * (qx - nx) - qy) % p
+            else:
+                lam = ((uy - qy) * ivs[t]) % p
+                nx = (lam * lam - qx - ux) % p
+                ny = (lam * (qx - nx) - qy) % p
+            hit = get(nx)
+            if hit is not None:
+                jv = hit >> 1
+                if (ny & 1) == (hit & 1):
+                    return (idx * M + jv) % n
+                return (idx * M - jv) % n
+            if i == cnt:
+                qx, qy = nx, ny
+        i_base += cnt
+    return 0
+
+
+def main():
+    data = json.loads(sys.stdin.read())
+    k = solve(
+        int(data["p"]),
+        int(data["a"]),
+        int(data["Gx"]),
+        int(data["Gy"]),
+        int(data["n"]),
+        int(data["Px"]),
+        int(data["Py"]),
+    )
+    print(f"k={k}")
+
+
+if __name__ == "__main__":
+    main()
