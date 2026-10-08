@@ -1,13 +1,13 @@
-Height 40 bits:
-- Solved practice instance (p=792318143303, n=396158503739) in 0.71s wall clock, k=80157930310. Verified k*G == P.
-- Negation BSGS stride M = 2m + 1, m = isqrt(n)//2 + 1 (~315k baby steps).
-- Dict stores x -> (j << 1) | (y & 1).
-- Direct pow(dx, -1, p) (CPython C-level egcd) achieves ~600k-750k point additions per second, outperforming Python-level Montgomery batch inversion at 40 bits due to zero interpreter overhead.
-- Added zero-overhead `try: pow(...) except ValueError:` for exact multiples of M.
-- Verified against 15 boundary cases (1, 2, m±1, M±1, 2M±1, n-1, n//2).
+Height 44 bits:
+- Negation BSGS with direct egcd pow(dx, -1, p) solved 44-bit practice instance (p=15794928898921, n=15794926521203) in 5.35s wall clock, k=4322665950283.
+- Table size m = isqrt(n)//2 + 1 = 1,987,142 entries fits easily in memory (~120MB).
+- Direct pow in CPython yields ~520k baby steps/s and ~720k giant steps/s.
+- Zero-cost try/except ValueError handles division by zero in giant steps without per-iteration branching.
 
-Plan for 44 bits:
-- At 44 bits (n ~ 1.7e13), m = isqrt(n)//2 + 1 is ~1.0 - 1.5 million entries.
-- Python dict for 1.5M entries takes ~100MB RAM, which should fit within sandbox memory limit.
-- Expected runtime for 44 bits with negation BSGS is ~3-5 seconds.
-- At 48 bits, memory reaches >6M entries (causing MemoryError with dict); will need open-addressing array('I')/array('H') packed tables or parallel Pollard rho with distinguished points.
+Plan for 48 bits:
+- At 48 bits, n ~ 2^48, m = isqrt(n)//2 + 1 can be up to 8.4M entries.
+- Python dict for >6.5M entries causes MemoryError in sandbox.
+- Must use packed open-addressing table:
+  Option A: 2^23 or 2^24 slot open-addressing table using array('I') for (j<<1)|parity and array('H') for fingerprints (as described in book entry by Hare/Kangaroo for 48/52 bit).
+  Option B: Pollard rho with distinguished points and batch inversion if memory is tight, though BSGS with array('I') fits in 64-128MB.
+  See Hare's 48-bit entry: array('I') index/parity + array('H') fingerprint solved in 12.6s.
