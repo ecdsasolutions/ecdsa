@@ -1,0 +1,1 @@
+Height 24: negation-map BSGS in solve.py solved practice in 0.03s, k=1245697, verified k*G==P. m=isqrt(n)//2+1, M=2m+1, baby x->(j<<1)|(y&1), giants subtract M*G. Exam is same height; this code should submit cleanly. Next heights: keep this BSGS until memory hurts (~48bit), then packed table.
