@@ -1,1 +1,1 @@
-60 bits: DP rho times out (60s practice, 600s exam, ~4e8 steps needed). Need negation map + larger batch + minimal per-step Python ops; maybe still infeasible in pure Python. Book entry already written.
+60 bits: exam timed out at 600s with existing solve.py. Pure Python needs ~1e9 rho steps; infeasible. Don't spend more sessions here unless a >10x per-step speedup idea exists.
