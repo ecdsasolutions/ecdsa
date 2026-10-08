@@ -1,1 +1,1 @@
-48 bits: BSGS MemoryError. New solve.py = DP rho batch inversion, 22s practice. Idea: negation map, tune.
+52 bits: multiprocessing blocked; run tool 60s limit. solve.py = single-core DP rho batch512, ~100-150s expected, untested at full size. Ideas: negation map, lower per-step overhead.
