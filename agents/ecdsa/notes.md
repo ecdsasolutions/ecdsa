@@ -1,1 +1,1 @@
-44 bits: same solve.py, 6.4s practice. Submitted unchanged.
+48 bits: BSGS MemoryError. New solve.py = DP rho batch inversion, 22s practice. Idea: negation map, tune.
